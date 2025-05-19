@@ -1,0 +1,193 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// رابط MongoDB Atlas المستبدل
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://syrianwheels_admin:db_4t4Y3D4fD8h07rdO@cluster1.yaqlzp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1';
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// اتصال بقاعدة البيانات
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('Could not connect to MongoDB', err));
+
+// تعريف نماذج البيانات
+const carSchema = new mongoose.Schema({
+  make: String,
+  model: String,
+  year: Number,
+  price: Number,
+  transmission: String,
+  fuelType: String,
+  seatingCapacity: Number,
+  color: String,
+  plateNumber: String,
+  status: String,
+  images: [String],
+  features: [String],
+  description: {
+    ar: String,
+    en: String
+  }
+});
+
+const userSchema = new mongoose.Schema({
+  username: String,
+  email: String,
+  password: String,
+  fullName: {
+    first: String,
+    last: String
+  },
+  phone: String,
+  address: String,
+  role: String,
+  status: String
+});
+
+const bookingSchema = new mongoose.Schema({
+  carId: mongoose.Schema.Types.ObjectId,
+  userId: mongoose.Schema.Types.ObjectId,
+  startDate: String,
+  endDate: String,
+  totalDays: Number,
+  totalPrice: Number,
+  status: String,
+  paymentStatus: String,
+  createdAt: String
+});
+
+const Car = mongoose.model('Car', carSchema);
+const User = mongoose.model('User', userSchema);
+const Booking = mongoose.model('Booking', bookingSchema);
+
+// Routes
+
+// الصفحة الرئيسية
+app.get('/', (req, res) => {
+  res.send('Syrianwheels API is running');
+});
+
+// Cars
+app.get('/api/cars', async (req, res) => {
+  try {
+    const cars = await Car.find();
+    res.json(cars);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/cars/:id', async (req, res) => {
+  try {
+    const car = await Car.findById(req.params.id);
+    if (!car) return res.status(404).json({ message: 'Car not found' });
+    res.json(car);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/cars', async (req, res) => {
+  try {
+    const car = new Car(req.body);
+    const savedCar = await car.save();
+    res.status(201).json(savedCar);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Users
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email, password });
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    
+    res.json({
+      user: {
+        id: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role
+      },
+      token: 'mock-jwt-token'
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const userExists = await User.findOne({ email });
+    if (userExists) return res.status(400).json({ message: 'User already exists' });
+    
+    const user = new User({
+      ...req.body,
+      role: 'customer',
+      status: 'active'
+    });
+    await user.save();
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Bookings
+app.get('/api/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find();
+    res.json(bookings);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.get('/api/bookings/:id', async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post('/api/bookings', async (req, res) => {
+  try {
+    const booking = new Booking({
+      ...req.body,
+      createdAt: new Date().toISOString().split('T')[0]
+    });
+    const savedBooking = await booking.save();
+    res.status(201).json(savedBooking);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// User bookings
+app.get('/api/users/:userId/bookings', async (req, res) => {
+  try {
+    const userBookings = await Booking.find({ userId: req.params.userId });
+    res.json(userBookings);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
